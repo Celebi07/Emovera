@@ -1,282 +1,213 @@
 import cv2
+import os
+import uuid
 import numpy as np
-import pygame
-from pygame.locals import QUIT
-from keras.models import model_from_json
-from keras.preprocessing.image import img_to_array
-import time
-import random
-import pygame.mixer
-from pygame.locals import QUIT, KEYDOWN, K_RETURN
 
-# Initialize Pygame
-pygame.init()
-def draw_random_shapes():
-    num_shapes = random.randint(1, 5)
-    for _ in range(num_shapes):
-        shape = random.choice(["circle", "rectangle"])
-        color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        x = random.randint(200, 800)
-        y = random.randint(200, 600)
-        size = random.randint(30, 100)
-        if shape == "circle":
-            pygame.draw.circle(window, color, (x, y), size)
-        elif shape == "rectangle":
-            pygame.draw.rect(window, color, (x, y, size, size))
-def display_additional_ideas(font):
-    idea_texts = [
-        "Emotions are the colors of the soul,",
-        "Express them all to be truly whole.",
-        "From joy to sorrow, they make us real,",
-        "Let your heart guide, let your spirit feel.",
-        "Show happiness, a smile so bright,",
-        "Or sadness, tears that cleanse the night.",
-        "Anger flames, a passionate fire,",
-        "Fear and courage, a tightrope wire.",
-        "Be surprised, let your spirit dance,",
-        "Embrace neutrality, take a chance.",
-        "Express disgust, a subtle clue,",
-        "Let your emotions shine through."
-    ]
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Layer, Conv2D, Dense, MaxPooling2D, Input, Flatten
+from tensorflow.keras.metrics import Precision, Recall
+
+# Siamese L1 Distance class
+class L1Dist(Layer):
     
-    x = WINDOW_WIDTH * 0.7
-    y = 20
-    spacing = 30
+    # Init method - inheritance
+    def __init__(self, **kwargs):
+        super().__init__()
+       
+    # Magic happens here - similarity calculation
+    def call(self, input_embedding, validation_embedding):
+        return tf.math.abs(input_embedding - validation_embedding)
     
-    display_text("Emotions", x, y, font, GREEN)
+def preprocess(file_path):
     
-    for i, idea_text in enumerate(idea_texts):
-        display_text(idea_text, x, y + (i + 1) * spacing, font, WHITE)
-# Set up Pygame window
-WINDOW_WIDTH = 1000
-WINDOW_HEIGHT = 700
-window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption('Emotion Game')
+    # Read in image from file path
+    byte_img = tf.io.read_file(file_path)
+    # Load in the image 
+    img = tf.io.decode_jpeg(byte_img)
+    
+    # Preprocessing steps - resizing the image to be 105x105x3
+    img = tf.image.resize(img, (105,105))
+    # Scale image to be between 0 and 1 
+    img = img / 255.0
 
-# Emotions and their corresponding indices
-emotions = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+    # Return image
+    return img
 
-# Colors
-WHITE = (255, 255, 255)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
 
-def display_shape_prompt(font):
-    display_text("Draw:", 20, 740, font)
-    display_text("Shapes", 20, 780, font, GREEN)
+# Ask user for name and ID
+user_name = input("Enter your name: ")
+user_id = input("Enter your ID: ")
 
-def display_color_prompt(font):
-    display_text("Use:", 20, 840, font)
-    display_text("Colors", 20, 880, font, GREEN)
+# Construct the path to the user's image folder
+user_image_folder = os.path.join('VerificationImages', 'Images', user_name + "_" + user_id)
 
-def display_color_options(font):
-    colors = ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"]
-    display_text("Color Options:", 20, 940, font)
-    y = 980
-    for color in colors:
-        display_text(color, 20, y, font, (255, 255, 0))
-        y += 40
+# Check if the user folder already exists
+if os.path.exists(user_image_folder):
+    print("User already registered. Photos will not be captured.")
+else:
+    os.makedirs(user_image_folder, exist_ok=True)
+    print(f"New user folder created: {user_image_folder}")
 
-def change_background_color():
-    r = random.randint(0, 255)
-    g = random.randint(0, 255)
-    b = random.randint(0, 255)
-    window.fill((r, g, b))
+    # Load the pre-trained Haar cascade classifier for face detection
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-def display_time_remaining(last_prompt_time, prompt_interval, font):
-    current_time = time.time()
-    time_remaining = int(last_prompt_time + prompt_interval - current_time)
-    display_text("Time Remaining:", 20, 300, font)
-    display_text(str(max(0, time_remaining)), 20, 340, font, GREEN)
-
-def display_prompt(prompt_emotion, font):
-    display_text("Prompt Emotion:", 20, 400, font)
-    display_text(prompt_emotion, 20, 440, font, GREEN)
-
-def display_negative_effects(score, font):
-    if score < 0:
-        display_text("Watch out!", 20, 500, font, RED)
-        display_text("Negative Score", 20, 540, font, RED)
-
-def display_positive_effects(score, font):
-    if score > 0:
-        display_text("Keep it up!", 20, 600, font, GREEN)
-        display_text("Positive Score", 20, 640, font, GREEN)
-
-def display_instruction(font):
-    instruction_text = "Make the face as prompted to earn points!"
-    display_text(instruction_text, 20, 680, font, WHITE)
-
-def draw_random_shapes():
-    num_shapes = random.randint(1, 5)
-    for _ in range(num_shapes):
-        shape = random.choice(["circle", "rectangle"])
-        color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        x = random.randint(200, 800)
-        y = random.randint(200, 600)
-        size = random.randint(30, 100)
-        if shape == "circle":
-            pygame.draw.circle(window, color, (x, y), size)
-        elif shape == "rectangle":
-            pygame.draw.rect(window, color, (x, y, size, size))
-
-def display_shape_prompt(font):
-    display_text("Draw:", 20, 740, font)
-    display_text("Shapes", 20, 780, font, GREEN)
-
-def display_color_prompt(font):
-    display_text("Use:", 20, 840, font)
-    display_text("Colors", 20, 880, font, GREEN)
-
-def display_color_options(font):
-    colors = ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"]
-    display_text("Color Options:", 20, 940, font)
-    y = 980
-    for color in colors:
-        display_text(color, 20, y, font, (255, 255, 0))
-        y += 40
-
-def change_background_color():
-    r = random.randint(0, 255)
-    g = random.randint(0, 255)
-    b = random.randint(0, 255)
-    window.fill((r, g, b))
-
-def setup_pygame_font(size):
-    return pygame.font.Font(None, size)
-
-def display_text(text, x, y, font, color=WHITE):
-    text_surface = font.render(text, True, color)
-    window.blit(text_surface, (x, y))
-
-def display_emotion_text(emotion, font):
-    display_text("Perform:", 20, 100, font)
-    display_text(emotion, 20, 140, font, GREEN)
-
-def display_score(score, font):
-    display_text("Score:", 20, 200, font)
-    score_color = GREEN if score >= 0 else RED
-    display_text(str(score), 20, 240, font, score_color)
-
-def draw_detected_emotion(test_image, x, y, h, detected_emotion):
-    label = f"Detected: {detected_emotion}"
-    cv2.putText(test_image, label, (int(x), int(y) + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, GREEN, 2)
-
-def main():
-    # Inside the main loop
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:  # Change background color on SPACE key press
-                change_background_color()
-
-    pygame.mixer.init()
-    pygame.mixer.music.load("music.mp3")
-    model = model_from_json(open("model.json", "r").read())
-    pygame.mixer.music.play(-1)
-    model.load_weights('best_model.h5')
-    face_haar_cascade = cv2.CascadeClassifier('./haarcascade_frontalface_default.xml')
+    # Establish a connection to the webcam
     cap = cv2.VideoCapture(0)
-    
-    last_prompt_time = time.time()
-    prompt_interval = 30  # Prompt for emotion every 30 seconds
-    prompt_emotion = random.choice(emotions)
-    score = 0
 
-    font_small = setup_pygame_font(22)
-    font_medium = setup_pygame_font(32)
-    font_large = setup_pygame_font(42)
+    capturing = False
+    capture_count = 0
 
-    # while True:
-    #     for event in pygame.event.get():
-    #         if event.type == pygame.KEYDOWN:
-    #             if event.key == pygame.K_SPACE:
-    #                 change_background_color()
-                    
-    #     valid, test_image = cap.read()
-    #     if not valid:
-    #         break
+    while cap.isOpened():
+        ret, frame = cap.read()
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                cap.release()
-                cv2.destroyAllWindows()
-                pygame.quit()
-                print("Total Score:", score)
-                return
+        # Cut down frame to 250x250px
+        frame = frame[120:120+250, 200:200+250, :]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        valid, test_image = cap.read()
-        if not valid:
+        display_frame = frame.copy()
+        for (x, y, w, h) in faces:
+            cv2.rectangle(display_frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+
+        cv2.imshow('Face Detection', display_frame)
+
+        key = cv2.waitKey(30)
+        if key & 0xFF == ord('v') and len(faces) > 0:
+            capturing = True 
+
+        if capturing and len(faces) > 0 and capture_count < 2:
+            imgname = os.path.join(user_image_folder, f'{uuid.uuid1()}.jpg')
+            cv2.imwrite(imgname, frame)
+            cv2.imshow('Image Collection', frame)
+            capture_count += 1
+            cv2.waitKey(30)
+
+        if capture_count >= 2:
+            capturing = False
+            print("Capturing complete.")
             break
 
-        test_image = cv2.rotate(test_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        # Clear the right side of the screen
-        pygame.draw.rect(window, (0, 0, 0), (WINDOW_WIDTH * 0.7, 0, WINDOW_WIDTH * 0.3, WINDOW_HEIGHT))
+        if key & 0xFF == ord('q'):
+            break
 
-        # Display additional ideas
-        display_additional_ideas(font_small)
-        gray_image = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
+    cap.release()
+    cv2.destroyAllWindows()
 
-        faces_detected = face_haar_cascade.detectMultiScale(gray_image)
-        for (x, y, w, h) in faces_detected:
-            cv2.rectangle(test_image, (x, y), (x + w, y + h), (255, 0, 0))
-            roi_gray = gray_image[y:y + h, x:x + w]
-            roi_gray = cv2.resize(roi_gray, (48, 48))
-            image_pixels = img_to_array(roi_gray)
-            image_pixels = np.expand_dims(image_pixels, axis=0)
-            predictions = model.predict(image_pixels)
-            max_index = np.argmax(predictions[0])
 
-            detected_emotion = emotions[max_index]
-            score_change = evaluate_emotion(prompt_emotion, detected_emotion)
-            score += score_change
 
-            draw_detected_emotion(test_image, x, y, h, detected_emotion)
+siamese_model = tf.keras.models.load_model('snn_kash.h5', 
+                                   custom_objects={'L1Dist':L1Dist, 'BinaryCrossentropy':tf.losses.BinaryCrossentropy})
 
-        resize_image = cv2.resize(test_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame_image = cv2.cvtColor(resize_image, cv2.COLOR_BGR2RGB)
-        pygame_surface = pygame.surfarray.make_surface(pygame_image)
-        window.blit(pygame_surface, (0, 0))
+# # Ask for user name and ID
+# user_name = input("Enter the user's name: ")
+# user_id = input("Enter the user's ID: ")
+# user_folder = f"{user_name}_{user_id}"
+# print(user_folder)
+# # Construct the path to the user's image folder
+# user_image_folder = os.path.join('VerificationImages', 'Images', user_folder)
+# # VerificationImages\Images\bho_2
+# # Check if the user's folder exists
+# if not os.path.exists(user_image_folder):
+#     print("User folder not found.")
+# else:
+#     # List all images in the user's folder
+#     for image in os.listdir(os.path.join('VerificationImages', 'Images',user_folder)):
+#         validation_img = os.path.join(user_folder, image)
+#         print(validation_img) 
 
-        display_emotion_text(prompt_emotion, font_large)
-        display_score(score, font_medium)
-        display_time_remaining(last_prompt_time, prompt_interval, font_medium)
-        # display_prompt(prompt_emotion, font_medium)
-        display_negative_effects(score, font_medium)
-        display_positive_effects(score, font_medium)
-        display_instruction(font_small)
-        display_shape_prompt(font_medium)
-        display_color_prompt(font_medium)
-        display_color_options(font_small)
-        pygame.display.flip()
-
-        # Check if it's time for a new prompt
-        current_time = time.time()
-        if current_time - last_prompt_time >= prompt_interval:
-            last_prompt_time = current_time
-            prompt_emotion = random.choice(emotions)
-            # print(f"Perform: {prompt_emotion}")
+def verify(model, detection_threshold, verification_threshold):                             
+    # Ask user for name and ID to identify the folder
+    # user_name = input("Enter user name for verification: ")
+    # user_id = input("Enter user ID for verification: ")
+    user_folder = f"{user_name}_{user_id}"
+    
+    # Construct the path to the user's image folder
+    user_image_folder = os.path.join('VerificationImages', 'Images', user_folder)
+    
+    # Check if the user's folder exists
+    if not os.path.exists(user_image_folder):
+        print("User folder not found.")
+        return
+    # Build results array
+    results = []
+    for image in os.listdir(user_image_folder):
+        input_img = preprocess(os.path.join('VerificationImages', 'InputImage', user_folder, 'input_image.jpg'))
+        validation_img = preprocess(os.path.join(user_image_folder, image))
         
-        # Apply additional functionalities based on the prompt
-            if prompt_emotion == "surprise":
-                draw_random_shapes()
-            elif prompt_emotion == "happy":
-                display_shape_prompt(font_medium)
-            elif prompt_emotion == "neutral":
-                display_color_prompt(font_medium)
-                display_color_options(font_small)
-    if score > 50:
-            pygame.quit()
-            print("Congratulations! You scored more than 50 points. Game over.")
-            return
-def evaluate_emotion(prompt_emotion, detected_emotion):
-    if detected_emotion == prompt_emotion:
-        print("+1 Point")
-        return 1
-    else:
-        print("-1 Point")
-        return -1
+        # Make Predictions 
+        result = model.predict(list(np.expand_dims([input_img, validation_img], axis=1)))
+        results.append(result)
     
+    # Detection Threshold: Metric above which a prediciton is considered positive 
+    detection = np.sum(np.array(results) > detection_threshold)
     
-if __name__ == '__main__':
-    main()
+    # Verification Threshold: Proportion of positive predictions / total positive samples 
+    verification = detection / len(os.listdir(user_image_folder)) 
+    verified = verification > verification_threshold
+    
+    return results, verified 
+
+
+
+# Ask user for name and ID to identify the input image folder
+user_name = input("Enter your name: ")
+user_id = input("Enter your user ID: ")
+
+# Construct the path to the user's input image folder
+input_image_folder = os.path.join('VerificationImages', 'InputImage', f'{user_name}_{user_id}')
+
+# Create the input image folder if it doesn't exist
+if not os.path.exists(input_image_folder):
+    os.makedirs(input_image_folder)
+    print(f"Input image folder created: {input_image_folder}")
+else:
+    print("Input image folder already exists.")
+
+
+# Load the pre-trained Haar cascade classifier for face detection
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+# Open the default camera (camera index 0)
+cap = cv2.VideoCapture(0)
+
+if not cap.isOpened():
+    print("Error: Could not open camera.")
+    exit()
+
+while cap.isOpened():
+    ret, frame = cap.read()
+
+    if not ret:
+        print("Error: Could not read frame.")
+        break
+
+    frame_roi = frame[120:120+250, 200:200+250, :]
+    
+    # Display the verification frame
+    cv2.imshow('Verification', frame_roi)
+
+    key = cv2.waitKey(10) & 0xFF
+
+    if key == ord('v'):
+        # Construct the path to the user's input image folder
+        input_image_folder = os.path.join('VerificationImages', 'InputImage', f'{user_name}_{user_id}')
+    
+    # Create the input image folder if it doesn't exist
+        if not os.path.exists(input_image_folder):
+            os.makedirs(input_image_folder)
+    
+        input_image_path = os.path.join(input_image_folder, 'input_image.jpg')
+        cv2.imwrite(input_image_path, frame_roi)
+        print(f"Input image saved as {input_image_path}")
+    
+    if key == ord('q'):
+        break
+
+cap.release() 
+cv2.destroyAllWindows()
+
+
+# Run verification using your 'verify' function and 'siamese_model'
+results, verified = verify(siamese_model, 0.5, 0.5) 
+print(verified) 
