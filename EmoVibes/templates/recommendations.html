@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recommendations</title>
+</head>
+<body>
+    <h1>Recommendations for {{ emotion }}</h1>
+    
+    <h2>Recommended Books</h2>
+    <ul>
+        {% for book in books %}
+            <li>
+                <img src="{{ book.cover_image }}" alt="Book Cover" height="150">
+                <p><strong>Title:</strong> {{ book.title }}</p>
+                <p><strong>Author:</strong> {{ book.author }}</p>
+                <p><strong>Published Year:</strong> {{ book.published_year }}</p>
+                <a href="{{ book.link }}" target="_blank">More Info</a>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h2>Recommended Songs</h2>
+    <ul>
+        {% for song in songs %}
+            <li>
+                <img src="{{ song.cover_photo }}" alt="Album Cover" height="150">
+                <p><strong>Name:</strong> {{ song.name }}</p>
+                <p><strong>Artists:</strong> {{ song.artists|join(', ') }}</p>
+                <p><strong>Album:</strong> {{ song.album }}</p>
+                <p><strong>Release Year:</strong> {{ song.release_year }}</p>
+                <a href="{{ song.spotify_link }}" target="_blank">Listen on Spotify</a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
